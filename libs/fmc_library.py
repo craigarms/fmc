@@ -5,12 +5,14 @@ import time
 from requests.auth import HTTPBasicAuth
 import logging
 from tabulate import tabulate
+import os
 
 
 class Fmc:
     def __init__(self, server, username, password):
         self.server = server
         self.token = self.getAuthToken(username, password)
+        self.cache = {}
 
     FORMAT = '[%(asctime)s] %(levelname)s %(funcName)s %(message)s'
     logging.basicConfig(format=FORMAT, level=logging.INFO)
@@ -21,7 +23,7 @@ class Fmc:
         auth = {}
         r = None
         headers = {'Content-Type': 'application/json'}
-        api_auth_path = cfg.URL_TOKEN
+        api_auth_path = self.getAPIPath('TOKEN')
         auth_url = self.server + api_auth_path
         try:
             r = requests.post(auth_url, headers=headers, auth=requests.auth.HTTPBasicAuth(username, password), verify=False)
@@ -85,7 +87,7 @@ class Fmc:
 
     def getDomains(self):
         stime = time.time()
-        api_path = cfg.URL_DOMAINS
+        api_path = self.getAPIPath('DOMAINS')
         headers = {'Content-Type': 'application/json'}
         headers['X-auth-access-token'] = self.token['token']
         url = self.server + api_path
@@ -109,7 +111,38 @@ class Fmc:
         finally:
             if r: r.close()
 
-    def getObjects(self, api_path, domain="", limit="100"):
+    def getAPIPath(self, object_type):
+        for k, v in cfg.api_path.items():
+            if object_type in k:
+                return v
+
+    def getOfflineObject(self, objet, tombstone):
+        logging.debug(f'Retrieving {object} from cache')
+        if objet in self.cache:
+            logging.debug(f'Cache age for {object} is {time.time() - self.cache[objet]["tombstone"]}')
+            if time.time() - self.cache[objet]["tombstone"] < tombstone:
+                return self.cache[objet]
+
+        data = {}
+        logging.debug(f'Loading {object} from saved cache')
+        if os.path.isfile('data.json'):
+            with open('data.json', 'r') as fp:
+                data = json.load(fp)
+
+        if objet in data:
+            logging.debug(f'Loading {objet} saved cache into live cache')
+            self.cache[objet] = data[objet]
+
+        return data[objet]
+
+    def getObjects(self, api, domain="", limit="100", offline=False, tombstone=300):
+        api_path = self.getAPIPath(api)
+
+        if offline:
+            object = self.getOfflineObject(api, tombstone)
+            if object:
+                return object
+
         objects = {'items': []}
         if not domain:
             domains = self.getDomains()
@@ -120,10 +153,12 @@ class Fmc:
         else:
             objects = self.getPaginatedQuery(self.server, f"{api_path}&limit={limit}", domain)
 
+        self.cache[api] = objects
+        self.cache[api]["tombstone"] = time.time()
         return objects
 
     def getAllDevices(self, domain=""):
-        api_path = cfg.URL_DEVICES
+        api_path = self.getAPIPath('DEVICES')
         named_devices = {}
         devices = self.getObjects(api_path, domain)
 
@@ -199,3 +234,7 @@ class Fmc:
                 item = [o['name'], o['description'], o['value'], o['metadata']['domain']['name']]
                 items.append(item)
         return tabulate(items, columns, tablefmt="grid")
+
+    def saveCache(self):
+        with open('data.json', 'w') as fp:
+            json.dump(self.cache, fp)
