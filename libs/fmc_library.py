@@ -11,13 +11,18 @@ import os
 class Fmc:
     def __init__(self, server, username, password):
         self.server = server
-        self.token = self.getAuthToken(username, password)
+        self.username = username
+        self.password = password
+        self.token = {}
         self.cache = {}
 
     FORMAT = '[%(asctime)s] %(levelname)s %(funcName)s %(message)s'
     logging.basicConfig(format=FORMAT, level=logging.INFO)
 
-    def getAuthToken(self, username, password):
+    def getAuthToken(self):
+        if self.token:
+            return self.token
+
         stime = time.time()
         logging.info('Starting Auth process with '+ self.server)
         auth = {}
@@ -26,7 +31,7 @@ class Fmc:
         api_auth_path = self.getAPIPath('TOKEN')
         auth_url = self.server + api_auth_path
         try:
-            r = requests.post(auth_url, headers=headers, auth=requests.auth.HTTPBasicAuth(username, password), verify=False)
+            r = requests.post(auth_url, headers=headers, auth=requests.auth.HTTPBasicAuth(self.username, self.password), verify=False)
             auth_headers = r.headers
             auth['token'] = auth_headers.get('X-auth-access-token', default=None)
             auth['domain'] = auth_headers.get('domain_uuid', default=None)
@@ -34,16 +39,18 @@ class Fmc:
             logging.error('Error in generating auth token: ' + str(err))
         logging.debug('Auth token acquired')
         logging.info('Auth token successfully acquired in %s seconds', str(time.time() - stime))
+        self.token = auth
         return auth
 
     def getQuery(self, path, domain=""):
         stime = time.time()
         logging.debug('Building Get Query for ' + self.server + ' to ' + path)
         if not domain:
-            domain = self.token['domain']
+            domain = self.getAuthToken()['domain']
 
         headers = {'Content-Type': 'application/json'}
-        headers['X-auth-access-token'] = self.token['token']
+
+        headers['X-auth-access-token'] = self.getAuthToken()['token']
         api_path = cfg.FMC_API_BASE + domain + path
 
         url = self.server + api_path
@@ -89,7 +96,7 @@ class Fmc:
         stime = time.time()
         api_path = self.getAPIPath('DOMAINS')
         headers = {'Content-Type': 'application/json'}
-        headers['X-auth-access-token'] = self.token['token']
+        headers['X-auth-access-token'] = self.getAuthToken()['token']
         url = self.server + api_path
 
         try:
@@ -132,8 +139,9 @@ class Fmc:
         if objet in data:
             logging.debug(f'Loading {objet} saved cache into live cache')
             self.cache[objet] = data[objet]
+            return data[objet]
 
-        return data[objet]
+        return data
 
     def getObjects(self, api, domain="", limit="100", offline=False, tombstone=300):
         api_path = self.getAPIPath(api)
