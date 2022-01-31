@@ -35,7 +35,7 @@ This project has for goal to enable management of FMC objects, devices and polic
 # Example Usage
 
 ## fmc.py
-
+```
 usage: fmc.py [-h] [--debug] {search,add} ...
 
 FMC Utils to manage objects in CLI
@@ -48,7 +48,8 @@ positional arguments:
 optional arguments:
   -h, --help    show this help message and exit
   --debug, -d
-  
+```
+
 ### Search 
 ```
 usage: fmc.py search [-h]
