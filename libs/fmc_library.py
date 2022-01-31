@@ -17,7 +17,7 @@ class Fmc:
         self.cache = {}
 
     FORMAT = '[%(asctime)s] %(levelname)s %(funcName)s %(message)s'
-    logging.basicConfig(format=FORMAT, level=logging.INFO)
+    logging.basicConfig(format=FORMAT, level=logging.WARN)
 
     def getAuthToken(self):
         if self.token:
@@ -76,19 +76,55 @@ class Fmc:
         finally:
             if r: r.close()
 
+    def postQuery(self, path, data, domain=""):
+        stime = time.time()
+        logging.debug('Building Post Query for ' + self.server + ' to ' + path)
+        logging.debug(data)
+        if not domain:
+            domain = self.getAuthToken()['domain']
+
+        headers = {'Content-Type': 'application/json'}
+
+        headers['X-auth-access-token'] = self.getAuthToken()['token']
+        api_path = cfg.FMC_API_BASE + domain + path
+
+        url = self.server + api_path
+        if url[-1] == '/':
+            url = url[:-1]
+
+        try:
+            r = requests.post(url, data=json.dumps(data), headers=headers, verify=False)
+            status_code = r.status_code
+            resp = r.text
+            if (status_code == 201 or status_code == 202):
+                json_resp = json.loads(resp)
+                logging.debug('Returning JSON response for status code ' + str(status_code))
+                logging.info('Successfully posted query response for %s in %s seconds', path, str(time.time() - stime))
+                return json_resp
+            else:
+                r.raise_for_status()
+                logging.error('Error occurred in POST: ' + resp)
+                return None
+        except requests.exceptions.HTTPError as err:
+            logging.error('Error in connection: ' + str(err))
+            return None
+        finally:
+            if r: r.close()
+
     def getPaginatedQuery(self, auth, path, domain=""):
         stime = time.time()
         logging.debug('Building Paginated Get Query for ' + self.server + ' to ' + path)
         response = self.getQuery(path, domain)
         result = response
 
-        if 'paging' in response:
-            while 'next' in response['paging']:
-                base = self.server + cfg.FMC_API_BASE + domain
-                url = response['paging']['next'][0].replace(base, '')
-                response = self.getQuery(url, domain)
-                if 'items' in response:
-                    result['items'].extend(response['items'])
+        if response:
+            if 'paging' in response:
+                while 'next' in response['paging']:
+                    base = self.server + cfg.FMC_API_BASE + domain
+                    url = response['paging']['next'][0].replace(base, '')
+                    response = self.getQuery(url, domain)
+                    if 'items' in response:
+                        result['items'].extend(response['items'])
 
         return result
 
@@ -156,8 +192,9 @@ class Fmc:
             domains = self.getDomains()
             for d in domains['items']:
                 result = self.getPaginatedQuery(self.server, f"{api_path}&limit={limit}", d['uuid'])
-                if 'items' in result:
-                    objects['items'].extend(result['items'])
+                if result:
+                    if 'items' in result:
+                        objects['items'].extend(result['items'])
         else:
             objects = self.getPaginatedQuery(self.server, f"{api_path}&limit={limit}", domain)
 
@@ -191,6 +228,15 @@ class Fmc:
                 for l in item['literals']:
                     if 'value' in l:
                         if search in l['value']:
+                            result.append(item)
+            elif 'protocol' in item and 'port' in item:
+                if '/' in search:
+                    search_split = search.split('/')
+                    if search_split[0].upper() in item['protocol']:
+                        if search_split[1] in item['port']:
+                            result.append(item)
+                    elif search_split[1].upper() in item['protocol']:
+                        if search_split[0] in item['port']:
                             result.append(item)
         return result
 
@@ -241,8 +287,95 @@ class Fmc:
                         o['value'] += f"{oo['type']}: {oo['name']}\r\n"
                 item = [o['name'], o['description'], o['value'], o['metadata']['domain']['name']]
                 items.append(item)
+            if o['type'] == "AccessPolicy":
+                columns = ['Name', 'Description', 'Default', 'Domain']
+                item = [o['name'], (o['description'] if 'description' in o else ""), o['defaultAction']['action'], o['metadata']['domain']['name']]
+                items.append(item)
+            if o['type'] == "ProtocolPortObject":
+                columns = ['Name', 'Port', 'Protocol', 'Description', 'Domain']
+                item = [o['name'], o['port'], o['protocol'], (o['description'] if 'description' in o else ""), o['metadata']['domain']['name']]
+                items.append(item)
         return tabulate(items, columns, tablefmt="grid")
 
     def saveCache(self):
         with open('data.json', 'w') as fp:
             json.dump(self.cache, fp)
+
+    def ExtractUrlDomain(self, url):
+        regex = r"\/domain\/([^\/]+)"
+
+    def getAccessRules(self, policies):
+        for policy in policies:
+            if 'rules' in policy:
+                base = self.server + cfg.FMC_API_BASE
+                url = policy['rules']['links']['self'].replace(base, '')
+                acl = self.getPaginatedQuery(self.server, url)
+
+                return acl
+
+    def buildName(self, type, data, reverse=False):
+        if type == "host":
+            return f"G_srv-{data}"
+        elif type == "net":
+            return f"G_net-{data}".replace("/","-")
+        elif type == "fqdn":
+            return f"G_fqdn-{data}"
+        elif type == "service":
+            return f"G_svc-{data.upper()}".replace("/","-")
+
+    def insertHost(self, host, name="", description=""):
+        path = "/object/hosts"
+        if not name:
+            name = self.buildName("host", host)
+        post_data = {
+            'name': name,
+            'type': "host",
+            'value': host,
+            'description': description
+        }
+
+        return self.postQuery(path, post_data)
+
+    def insertNet(self, net, name="", description=""):
+        path = "/object/networks"
+        if not name:
+            name = self.buildName("net", net)
+        post_data = {
+            'name': name,
+            'type': "Network",
+            'value': net,
+            'description': description
+        }
+
+        return self.postQuery(path, post_data)
+
+    def insertGroup(self, members, name, description=""):
+        path = '/object/networkgroups'
+        post_data = {
+            'name': name,
+            'type': "NetworkGroup",
+            'description': description,
+            'literals': []
+        }
+
+        for member in members:
+            item = {
+                "value": member,
+                "type": "Network" if '/' in member else "Host"
+            }
+            post_data['literals'].append(item)
+
+        return self.postQuery(path, post_data)
+
+    def insertService(self, port, protocol, name="", description=""):
+        path = '/object/protocolportobjects'
+        if not name:
+            name = self.buildName("service", f"{port}/{protocol}")
+        post_data = {
+            'type': "ProtocolPortObject",
+            'description': description,
+            'name': name,
+            'port': port,
+            'protocol': protocol
+        }
+        return self.postQuery(path, post_data)

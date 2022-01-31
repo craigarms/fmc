@@ -7,5 +7,6 @@ api_path = {'URL_NETGRP': "/object/networkgroups?expanded=true",
             'URL_PROTO': "/object/protocolportobjects?expanded=true",
             'URL_DEVICES': "/devices/devicerecords?expanded=true",
             'URL_DOMAINS': '/api/fmc_platform/v1/info/domain',
-            'URL_TOKEN': "/api/fmc_platform/v1/auth/generatetoken"
+            'URL_TOKEN': "/api/fmc_platform/v1/auth/generatetoken",
+            'URL_POLICY': "/policy/accesspolicies?expanded=true"
             }
