@@ -1,16 +1,81 @@
-= Example Usage =
+# FMCUtils
 
-== fmc_getobject.py ==
+This project has for goal to enable management of FMC objects, devices and policies directly from a CLI
 
-Search for a port object containing the value "SEP" in either the name of the object or the value.
+## Currently supported features:
 
-`py fmc_getobject.py -t PORT SEP -f json --off`
+- Searching for:
+    - Hosts
+    - Networks
+    - Groups
+    - Services
+    
+- Adding:
+    - Hosts
+    - Networks
+    - Groups
+    - Services
+    
+## Planned Features
+- Removing:
+    - Hosts
+    - Networks
+    - Groups
+    - Services
 
-Output to Json format and save the retrieved objects to cache
+- Searching, Adding, Removing:
+    - FQDNs
+    - Access Rules
+    
+- Deduplicating Objects:
+    - Suggesting Access Policy changes to reduce the number of duplicate objects
 
+- Multi device, multi domain packet tracer
 
-Search for a host object containing the value "G_srv" in either the name of the object or the value.
+# Example Usage
 
-`py fmc_getobject.py -t HOSTS G_srv`
+## fmc.py
 
-Default output is table view, don't search offline cache
+usage: fmc.py [-h] [--debug] {search,add} ...
+
+FMC Utils to manage objects in CLI
+
+positional arguments:
+  {search,add}
+    search      Search for a rule or object
+    add         Add rule or object
+
+optional arguments:
+  -h, --help    show this help message and exit
+  --debug, -d
+  
+### Search 
+```
+usage: fmc.py search [-h]
+                     (--ip IP | --service SERVICE | --group GROUP | --fqdn FQDN)
+                     [--output {asa,table,json}] [--offline]
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --ip IP, -i IP
+  --service SERVICE, -s SERVICE
+  --group GROUP, -g GROUP
+  --fqdn FQDN, -f FQDN
+  --output {asa,table,json}, -o {asa,table,json}
+  --offline             Try to perform search with offline cache
+```
+### Add
+```
+usage: fmc.py add [-h]
+                  (--ip IP | --service SERVICE | --group GROUP | --fqdn FQDN)
+                  [--name NAME] [--description DESCRIPTION]
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --ip IP, -i IP
+  --service SERVICE, -s SERVICE
+  --group GROUP, -g GROUP
+  --fqdn FQDN, -f FQDN
+  --name NAME, -n NAME
+  --description DESCRIPTION, -d DESCRIPTION
+```
