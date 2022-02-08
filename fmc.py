@@ -129,9 +129,17 @@ def main():
     args = parser.parse_args()
     if 'func' in args:
         args.func(args)
+    else:
+        parser.print_help()
 
 
-fmc = fmc.Fmc(config('FMC_URL'),
-                  config('API_USERNAME'),
-                  config('API_PASSWD'))
-main()
+try:
+    fmc = fmc.Fmc(config('FMC_URL'),
+                      config('API_USERNAME'),
+                      config('API_PASSWD'))
+    main()
+except decouple.UndefinedValueError:
+    print(".env file needs to contain:"
+          " - FMC_URL"
+          " - API_USERNAME"
+          " - API_PASSWD")
