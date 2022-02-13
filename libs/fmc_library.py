@@ -6,6 +6,7 @@ from requests.auth import HTTPBasicAuth
 import logging
 from tabulate import tabulate
 import os
+from pprint import pprint
 
 
 class Fmc:
@@ -160,24 +161,22 @@ class Fmc:
                 return v
 
     def getOfflineObject(self, objet, tombstone):
-        logging.debug(f'Retrieving {object} from cache')
+        logging.debug(f'Retrieving {objet} from cache')
         if objet in self.cache:
-            logging.debug(f'Cache age for {object} is {time.time() - self.cache[objet]["tombstone"]}')
+            logging.debug(f'Cache age for {objet} is {time.time() - self.cache[objet]["tombstone"]}')
             if time.time() - self.cache[objet]["tombstone"] < tombstone:
                 return self.cache[objet]
 
-        data = {}
-        logging.debug(f'Loading {object} from saved cache')
-        if os.path.isfile('data.json'):
-            with open('data.json', 'r') as fp:
-                data = json.load(fp)
+        logging.debug(f'Loading {objet} from saved cache')
+        self.loadCache(objet)
 
-        if objet in data:
+        if objet in self.cache:
             logging.debug(f'Loading {objet} saved cache into live cache')
-            self.cache[objet] = data[objet]
-            return data[objet]
+            logging.debug(f'Cache age for {objet} is {time.time() - self.cache[objet]["tombstone"]}')
+            if time.time() - self.cache[objet]["tombstone"] < tombstone:
+                return self.cache[objet]
 
-        return data
+        return self.cache[objet]
 
     def getObjects(self, api, domain="", limit="100", offline=False, tombstone=300):
         api_path = self.getAPIPath(api)
@@ -203,9 +202,8 @@ class Fmc:
         return objects
 
     def getAllDevices(self, domain=""):
-        api_path = self.getAPIPath('DEVICES')
         named_devices = {}
-        devices = self.getObjects(api_path, domain)
+        devices = self.getObjects('DEVICES', domain)
 
         # Sort devices so that they are accessible by name
         if 'items' in devices:
@@ -298,8 +296,18 @@ class Fmc:
         return tabulate(items, columns, tablefmt="grid")
 
     def saveCache(self):
-        with open('data.json', 'w') as fp:
-            json.dump(self.cache, fp)
+        for api in self.cache:
+            with open(f'{api}.json', 'w') as fp:
+                json.dump(self.cache[api], fp)
+
+    def loadCache(self, api):
+        if os.path.isfile(f'{api}.json'):
+            with open(f'{api}.json', 'r') as fp:
+                self.cache[api] = json.load(fp)
+
+    def updateCache(self, api):
+        self.getObjects(api)
+        self.saveCache()
 
     def ExtractUrlDomain(self, url):
         regex = r"\/domain\/([^\/]+)"
