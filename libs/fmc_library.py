@@ -393,3 +393,27 @@ class Fmc:
             'protocol': protocol
         }
         return self.postQuery(path, post_data)
+
+    def insertServiceGroup(self, members, name, description=""):
+        self.updateCache("PORTS")
+        path = '/object/portobjectgroups'
+        post_data = {
+            'name': name,
+            'type': "PortObjectGroup",
+            'description': description,
+            'objects': []
+        }
+
+        for member in members:
+            service = self.SearchObject(self.cache["PORTS"],
+                                        self.buildName("service", f"{member['port']}/{member['protocol']}"))
+            if len(service) == 1:
+                if "id" in service[0]:
+                    service = service[0]
+            else:
+                service = self.insertService(member['port'], member['protocol'])
+
+            if "id" in service:
+                post_data['objects'].append({"id": service['id'], 'type': "ProtocolPortObject"})
+
+        return self.postQuery(path, post_data)

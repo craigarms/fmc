@@ -1,4 +1,7 @@
 import argparse
+
+import decouple
+
 from libs import fmc_library as fmc
 from pprint import pprint
 import urllib3
@@ -79,7 +82,29 @@ def add_object(args):
         elif args.service:
             name = args.name if args.name else ""
             description = args.description if args.description else ""
-            if '/' in args.service:
+            if '=' in args.service:
+                name = args.service.split('=')[0]
+                description = args.description if args.description else ""
+                members = []
+                if ',' in args.service.split('=')[1]:
+                    for member in args.service.split('=')[1].split(','):
+                        if '/' in member:
+                            if isinstance(int(member.split('/')[0]), int):
+                                members.append({
+                                    'port': member.split('/')[0],
+                                    'protocol': member.split('/')[1],
+                                })
+                            elif isinstance(int(member.split('/')[1]), int):
+                                members.append({
+                                    'port': member.split('/')[1],
+                                    'protocol': member.split('/')[0],
+                                })
+                    fmc.insertServiceGroup(members, name, description)
+                    args.offline = False
+                    args.output = 'table'
+                    args.service = name
+                    search_object(args)
+            elif '/' in args.service:
                 if isinstance(int(args.service.split('/')[0]), int):
                     port = args.service.split('/')[0]
                     protocol = args.service.split('/')[1]
