@@ -16,9 +16,14 @@ class Fmc:
         self.password = password
         self.token = {}
         self.cache = {}
+        self.setLoggingLevel("WARN")
 
-    FORMAT = '[%(asctime)s] %(levelname)s %(funcName)s %(message)s'
-    logging.basicConfig(format=FORMAT, level=logging.WARN)
+    def setLoggingLevel(self, level):
+        FORMAT = '[%(asctime)s] %(levelname)s %(funcName)s %(message)s'
+        if level == "WARN":
+            logging.basicConfig(format=FORMAT, level=logging.DEBUG)
+        elif level == "DEBUG":
+            logging.basicConfig(format=FORMAT, level=logging.DEBUG)
 
     def getAuthToken(self):
         if self.token:
