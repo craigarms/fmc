@@ -104,11 +104,12 @@ class Fmc:
                 return json_resp
             else:
                 r.raise_for_status()
-                logging.error('Error occurred in POST: ' + resp)
-                return None
+                logging.error('Error occurred in POST: ' + json.loads(resp))
+                return json.loads(resp)
         except requests.exceptions.HTTPError as err:
             logging.error('Error in connection: ' + str(err))
-            return None
+            logging.error('Error occurred in POST: ' + resp)
+            return json.loads(resp)
         finally:
             if r: r.close()
 
